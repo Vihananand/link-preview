@@ -233,9 +233,10 @@ const LeetCodeShowcase = () => {
                 <h1 className="text-3xl lg:text-4xl font-black bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
                   LeetCode Hub
                 </h1>
-                <p className="text-slate-400 text-sm font-medium">
-                  Made by Vihan • {stats.total} problems loaded
+                <p className="text-cyan-400 text-sm font-bold animate-pulse [text-shadow:0_0_10px_#22d3ee,0_0_20px_#22d3ee]">
+                  Made by Vihan Anand • {stats.total} problems loaded
                 </p>
+
               </div>
             </div>
 
@@ -246,21 +247,19 @@ const LeetCodeShowcase = () => {
               </div>
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-3 rounded-xl transition-all duration-300 ${
-                  viewMode === "grid"
+                className={`p-3 rounded-xl transition-all duration-300 ${viewMode === "grid"
                     ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg"
                     : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 hover:text-white"
-                }`}
+                  }`}
               >
                 <Grid size={20} />
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`p-3 rounded-xl transition-all duration-300 ${
-                  viewMode === "list"
+                className={`p-3 rounded-xl transition-all duration-300 ${viewMode === "list"
                     ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg"
                     : "bg-slate-800/50 text-slate-400 hover:bg-slate-700/50 hover:text-white"
-                }`}
+                  }`}
               >
                 <List size={20} />
               </button>
@@ -276,10 +275,10 @@ const LeetCodeShowcase = () => {
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full animate-spin">
                 <div className="absolute inset-2 bg-slate-950 rounded-full" />
               </div>
-              <Database className="absolute inset-4 text-cyan-400 animate-pulse" />
+              <Database className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-cyan-400 animate-pulse" />
             </div>
             <p className="text-xl text-white font-bold mb-2">
-              Connecting to MongoDB...
+              Connecting to Server...
             </p>
             <p className="text-slate-400">
               Fetching problems from LeetcodeLinks cluster
