@@ -54,8 +54,11 @@ const LeetCodeShowcase = () => {
 
       setProblems(data.problems);
 
-      // Extract unique topics
-      const uniqueTopics = [...new Set(data.problems.map((p) => p.topic))];
+      // Extract unique topics (flattened, no duplicates)
+      const allTopics = data.problems.flatMap((p) =>
+        p.topic.split(',').map((t) => t.trim())
+      );
+      const uniqueTopics = [...new Set(allTopics)].filter(Boolean);
       setTopics(uniqueTopics);
 
       // Calculate stats
@@ -87,7 +90,8 @@ const LeetCodeShowcase = () => {
       const matchesDifficulty =
         filterDifficulty === "All" || problem.difficulty === filterDifficulty;
       const matchesTopic =
-        filterTopic === "All" || problem.topic === filterTopic;
+        filterTopic === "All" ||
+        problem.topic.split(',').map(t => t.trim()).includes(filterTopic);
       return matchesSearch && matchesDifficulty && matchesTopic;
     });
     setFilteredProblems(filtered);
@@ -153,11 +157,13 @@ const LeetCodeShowcase = () => {
                 >
                   {problem.difficulty}
                 </span>
-                <div className="flex items-center gap-1 px-2 py-1 bg-slate-800/50 rounded-lg border border-slate-600/30">
-                  {getTopicIcon(problem.topic)}
-                  <span className="text-xs text-slate-300 font-medium">
-                    {problem.topic}
-                  </span>
+                <div className="flex flex-wrap gap-1">
+                  {problem.topic.split(',').map((topic, idx) => (
+                    <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-slate-800/50 rounded-lg border border-slate-600/30">
+                      {getTopicIcon(topic.trim())}
+                      <span className="text-xs text-slate-300 font-medium">{topic.trim()}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -433,9 +439,41 @@ const LeetCodeShowcase = () => {
                 ))}
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="flex flex-col gap-3">
                 {filteredProblems.map((problem) => (
-                  <ProblemCard key={problem._id} problem={problem} />
+                  <div key={problem._id} className="group flex bg-gradient-to-br from-slate-900/80 to-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-xl p-3 hover:from-slate-800/80 hover:to-slate-700/80 transition-all duration-500 hover:scale-[1.01] hover:shadow-xl hover:shadow-cyan-500/10 hover:border-cyan-500/30">
+                    <div className="flex-shrink-0 w-24 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg mr-4">
+                      {problem.serial}
+                    </div>
+                    <div className="flex-1 flex flex-col justify-between">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-lg font-bold text-white group-hover:text-cyan-400 transition-colors duration-300 line-clamp-1">{problem.title}</h3>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold border shadow ${getDifficultyColor(problem.difficulty)}`}>{problem.difficulty}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {problem.topic.split(',').map((topic, idx) => (
+                            <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-slate-800/50 rounded border border-slate-600/30">
+                              {getTopicIcon(topic.trim())}
+                              <span className="text-xs text-slate-300 font-medium">{topic.trim()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <a href={problem.questionLink} target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline text-xs font-semibold">Problem</a>
+                        <a href={problem.solutionLink} target="_blank" rel="noopener noreferrer" className="text-purple-400 underline text-xs font-semibold">Solution</a>
+                      </div>
+                    </div>
+                    <div className="hidden md:block ml-4 w-40 h-20 rounded-lg overflow-hidden border border-slate-700/50 bg-black/40">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${getYouTubeVideoId(problem.solutionLink)}`}
+                        title={`Solution for ${problem.title}`}
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full"
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
