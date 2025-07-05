@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   ExternalLink,
@@ -22,7 +22,7 @@ const LeetCodeShowcase = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDifficulty, setFilterDifficulty] = useState("All");
   const [filterTopic, setFilterTopic] = useState("All");
-  const [viewMode, setViewMode] = useState("grid");
+  const [viewMode, setViewMode] = useState("list");
   const [filteredProblems, setFilteredProblems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,6 +30,44 @@ const LeetCodeShowcase = () => {
   const [topics, setTopics] = useState([]);
   // Progress state: { [problemId]: { done: boolean, revised: boolean } }
   const [progress, setProgress] = useState({});
+  // Infinite scroll logic (container-based, trackpad/mouse compatible)
+  const CHUNK_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(CHUNK_SIZE);
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    setVisibleCount(CHUNK_SIZE); // Reset on filter change
+  }, [filteredProblems]);
+
+  // Throttle utility using requestAnimationFrame for smooth trackpad scroll
+  function throttleRAF(fn) {
+    let ticking = false;
+    return (...args) => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          fn(...args);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+  }
+
+  useEffect(() => {
+    if (loading || error) return;
+    const container = listRef.current;
+    if (!container) return;
+    const handleScroll = throttleRAF(() => {
+      if (
+        container.scrollTop + container.clientHeight >= container.scrollHeight - 600 &&
+        visibleCount < filteredProblems.length
+      ) {
+        setVisibleCount((prev) => Math.min(prev + CHUNK_SIZE, filteredProblems.length));
+      }
+    });
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [loading, error, visibleCount, filteredProblems.length]);
 
   // Load progress from localStorage on mount
   useEffect(() => {
@@ -41,12 +79,28 @@ const LeetCodeShowcase = () => {
     }
   }, []);
 
-  // Save progress to localStorage whenever it changes
-  useEffect(() => {
+
+  // Debounced save to localStorage, using requestIdleCallback for smooth UI
+  const saveTimeout = useRef();
+  const debouncedSave = useRef((progressObj) => {
     if (typeof window !== "undefined") {
-      localStorage.setItem("leetcode-progress", JSON.stringify(progress));
+      if (saveTimeout.current) clearTimeout(saveTimeout.current);
+      saveTimeout.current = setTimeout(() => {
+        const saveFn = () => {
+          try {
+            localStorage.setItem("leetcode-progress", JSON.stringify(progressObj));
+          } catch (e) {
+            // Ignore quota errors
+          }
+        };
+        if (typeof window.requestIdleCallback === "function") {
+          window.requestIdleCallback(saveFn, { timeout: 1000 });
+        } else {
+          setTimeout(saveFn, 0);
+        }
+      }, 0);
     }
-  }, [progress]);
+  });
 
   // Handler for checkbox changes
   const handleProgressChange = (problemId, type) => {
@@ -56,61 +110,71 @@ const LeetCodeShowcase = () => {
         ...prevState,
         [type]: !prevState[type],
       };
-      return { ...prev, [problemId]: newState };
+      const updated = { ...prev, [problemId]: newState };
+      // Save to localStorage outside of React state update
+      debouncedSave.current(updated);
+      return updated;
     });
   };
   // Fetch problems from MongoDB via API
   const fetchProblemsFromMongo = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
+    // Defer fetch to next event loop so UI can update
+    setTimeout(async () => {
+      try {
+        const response = await fetch("/api/problems", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
 
-      const response = await fetch("/api/problems", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.message || "Failed to fetch problems");
+        }
+
+        setProblems(data.problems);
+
+        // Extract unique topics (flattened, no duplicates)
+        setTimeout(() => {
+          const allTopics = data.problems.flatMap((p) =>
+            p.topic.split(',').map((t) => t.trim())
+          );
+          const uniqueTopics = [...new Set(allTopics)].filter(Boolean);
+          setTopics(uniqueTopics);
+        }, 0);
+
+        // Calculate stats
+        setTimeout(() => {
+          const newStats = {
+            total: data.problems.length,
+            easy: data.problems.filter((p) => p.difficulty === "Easy").length,
+            medium: data.problems.filter((p) => p.difficulty === "Medium").length,
+            hard: data.problems.filter((p) => p.difficulty === "Hard").length,
+          };
+          setStats(newStats);
+        }, 0);
+
+        setLoading(false);
+      } catch (error) {
+        setError("Failed to fetch problems from database");
+        setLoading(false);
       }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "Failed to fetch problems");
-      }
-
-      setProblems(data.problems);
-
-      // Extract unique topics (flattened, no duplicates)
-      const allTopics = data.problems.flatMap((p) =>
-        p.topic.split(',').map((t) => t.trim())
-      );
-      const uniqueTopics = [...new Set(allTopics)].filter(Boolean);
-      setTopics(uniqueTopics);
-
-      // Calculate stats
-      const newStats = {
-        total: data.problems.length,
-        easy: data.problems.filter((p) => p.difficulty === "Easy").length,
-        medium: data.problems.filter((p) => p.difficulty === "Medium").length,
-        hard: data.problems.filter((p) => p.difficulty === "Hard").length,
-      };
-      setStats(newStats);
-
-      setLoading(false);
-    } catch (error) {
-      setError("Failed to fetch problems from database");
-      setLoading(false);
-    }
+    }, 0);
   };
 
   useEffect(() => {
     fetchProblemsFromMongo();
   }, []);
 
+  // Only update filteredProblems when search/filter or problems list changes, not on progress change
   useEffect(() => {
     let filtered = problems.filter((problem) => {
       const matchesSearch =
@@ -162,114 +226,123 @@ const LeetCodeShowcase = () => {
     }
   };
 
-  const ProblemCard = ({ problem }) => (
-    <div className="group relative bg-gradient-to-br from-slate-900/80 to-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-6 hover:from-slate-800/80 hover:to-slate-700/80 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-cyan-500/10 hover:border-cyan-500/30">
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500/0 via-cyan-500/10 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+  // Memoize ProblemCard to prevent unnecessary rerenders unless progress for that problem changes
 
-      <div className="relative z-10">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                {problem.serial}
-              </div>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full animate-pulse" />
+  const ProblemCard = React.memo(
+    function ProblemCard({ problem, progress, onProgressChange }) {
+      return (
+        <div className="group relative bg-gradient-to-br from-slate-900/80 to-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-0 flex flex-col hover:from-slate-800/80 hover:to-slate-700/80 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-cyan-500/10 hover:border-cyan-500/30">
+          {/* Video at top */}
+          <div className="relative rounded-t-2xl overflow-hidden bg-black/50 border-b border-slate-700/50 group-hover:border-cyan-500/30 transition-colors duration-300">
+            <div className="aspect-video relative">
+              <iframe
+                src={`https://www.youtube.com/embed/${getYouTubeVideoId(problem.solutionLink)}`}
+                title={`Solution for ${problem.title}`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </div>
-            <div>
-              <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors duration-300">
+          </div>
+          {/* Card content below video */}
+          <div className="relative z-10 flex-1 flex flex-col p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="relative">
+                <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                  {problem.serial}
+                </div>
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full animate-pulse" />
+              </div>
+              <h3 className="text-xl font-bold text-white group-hover:text-cyan-400 transition-colors duration-300">
                 {problem.title}
               </h3>
-              <div className="flex items-center gap-2 mb-2">
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-bold border shadow-lg ${getDifficultyColor(
-                    problem.difficulty
-                  )}`}
-                >
-                  {problem.difficulty}
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {problem.topic.split(',').map((topic, idx) => (
-                    <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-slate-800/50 rounded-lg border border-slate-600/30">
-                      {getTopicIcon(topic.trim())}
-                      <span className="text-xs text-slate-300 font-medium">{topic.trim()}</span>
-                    </div>
-                  ))}
-                </div>
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border shadow-lg ${getDifficultyColor(problem.difficulty)}`}>{problem.difficulty}</span>
+              <div className="flex flex-wrap gap-1">
+                {problem.topic.split(',').map((topic, idx) => (
+                  <div key={idx} className="flex items-center gap-1 px-2 py-1 bg-slate-800/50 rounded-lg border border-slate-600/30">
+                    {getTopicIcon(topic.trim())}
+                    <span className="text-xs text-slate-300 font-medium">{topic.trim()}</span>
+                  </div>
+                ))}
               </div>
+            </div>
+            {/* Action buttons */}
+            <div className="flex gap-3 mt-auto">
+              <a
+                href={problem.questionLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-4 py-3 rounded-xl font-bold text-center transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 hover:scale-[1.02] group/btn"
+              >
+                <ExternalLink
+                  size={16}
+                  className="inline-block mr-2 group-hover/btn:animate-pulse"
+                />
+                Problem
+              </a>
+              <a
+                href={problem.solutionLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white px-4 py-3 rounded-xl font-bold text-center transition-all duration-300 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-[1.02] group/btn"
+              >
+                <Play
+                  size={16}
+                  className="inline-block mr-2 group-hover/btn:animate-pulse"
+                />
+                Solution
+              </a>
             </div>
           </div>
         </div>
-
-        {/* Video embed */}
-        <div className="relative mb-6 rounded-xl overflow-hidden bg-black/50 border border-slate-700/50 group-hover:border-cyan-500/30 transition-colors duration-300">
-          <div className="aspect-video relative">
-            <iframe
-              src={`https://www.youtube.com/embed/${getYouTubeVideoId(
-                problem.solutionLink
-              )}`}
-              title={`Solution for ${problem.title}`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              className="w-full h-full"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex gap-3 mb-3">
-          <a
-            href={problem.questionLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-4 py-3 rounded-xl font-bold text-center transition-all duration-300 hover:shadow-lg hover:shadow-orange-500/25 hover:scale-[1.02] group/btn"
-          >
-            <ExternalLink
-              size={16}
-              className="inline-block mr-2 group-hover/btn:animate-pulse"
-            />
-            Problem
-          </a>
-          <a
-            href={problem.solutionLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white px-4 py-3 rounded-xl font-bold text-center transition-all duration-300 hover:shadow-lg hover:shadow-pink-500/25 hover:scale-[1.02] group/btn"
-          >
-            <Play
-              size={16}
-              className="inline-block mr-2 group-hover/btn:animate-pulse"
-            />
-            Solution
-          </a>
-        </div>
-        {/* Progress checkboxes below buttons */}
-        <div className="flex flex-row gap-6 justify-center mb-4">
-          <label className="flex items-center gap-2 cursor-pointer select-none group">
-            <input
-              type="checkbox"
-              checked={progress[problem._id]?.done || false}
-              onChange={() => handleProgressChange(problem._id, "done")}
-              className="custom-checkbox"
-            />
-            <span className="text-xs font-bold text-green-400 group-hover:text-white transition-colors duration-200">Done</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none group">
-            <input
-              type="checkbox"
-              checked={progress[problem._id]?.revised || false}
-              onChange={() => handleProgressChange(problem._id, "revised")}
-              className="custom-checkbox"
-            />
-            <span className="text-xs font-bold text-cyan-400 group-hover:text-white transition-colors duration-200">Revised</span>
-          </label>
-        </div>
-      </div>
-    </div>
+      );
+    },
+    (prevProps, nextProps) => {
+      // Only rerender if progress for this problem changes
+      return (
+        prevProps.problem._id === nextProps.problem._id &&
+        prevProps.progress.done === nextProps.progress.done &&
+        prevProps.progress.revised === nextProps.progress.revised &&
+        prevProps.problem.serial === nextProps.problem.serial &&
+        prevProps.problem.title === nextProps.problem.title &&
+        prevProps.problem.difficulty === nextProps.problem.difficulty &&
+        prevProps.problem.topic === nextProps.problem.topic &&
+        prevProps.problem.questionLink === nextProps.problem.questionLink &&
+        prevProps.problem.solutionLink === nextProps.problem.solutionLink
+      );
+    }
   );
+  ProblemCard.displayName = "ProblemCard";
+
+
+
+  // Popup state for blocking UI after videos load
+  // Declare these at the top level of the component if not already present
+  const [showBlockPopup, setShowBlockPopup] = useState(false);
+  const [blockActive, setBlockActive] = useState(false);
+
+  // Show blocking popup for 4 seconds, but render cards (and iframes) in the background
+  // Only declare these once!
+  // (If already declared above, do not redeclare here)
+  useEffect(() => {
+    if (!loading && !error && filteredProblems.length > 0) {
+      setShowBlockPopup(true);
+      setBlockActive(true);
+      const timer = setTimeout(() => {
+        setShowBlockPopup(false);
+        setBlockActive(false);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, error, filteredProblems.length]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+      {/* Removed blocking popup overlay and pointer events logic */}
+      {/* ...existing code... */}
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl animate-pulse" />
@@ -292,7 +365,6 @@ const LeetCodeShowcase = () => {
                 <p className="text-cyan-400 text-sm font-bold animate-pulse [text-shadow:0_0_10px_#22d3ee,0_0_20px_#22d3ee]">
                   Made by Vihan Anand • {stats.total} problems loaded
                 </p>
-
               </div>
             </div>
 
@@ -419,8 +491,9 @@ const LeetCodeShowcase = () => {
               </div>
             </div>
 
+
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               {[
                 {
                   label: "Total",
@@ -473,6 +546,16 @@ const LeetCodeShowcase = () => {
               ))}
             </div>
 
+            {/* Progress bar moved to /progress page. */}
+            <div className="mb-8 w-full flex justify-end">
+              <a
+                href="/progress"
+                className="inline-block px-6 py-3 bg-gradient-to-r from-green-400 to-cyan-500 hover:from-green-500 hover:to-cyan-600 text-white rounded-xl font-bold transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/25 hover:scale-[1.02]"
+              >
+                View Progress
+              </a>
+            </div>
+
             {/* Problems Grid/List */}
             {filteredProblems.length === 0 ? (
               <div className="text-center py-20">
@@ -483,71 +566,110 @@ const LeetCodeShowcase = () => {
                 </p>
               </div>
             ) : viewMode === "grid" ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {filteredProblems.map((problem) => (
-                  <ProblemCard key={problem._id} problem={problem} />
+              <div
+                ref={listRef}
+                className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 overflow-y-auto overflow-x-hidden"
+                style={{ maxHeight: '70vh', minWidth: '0', width: '100%' }}
+              >
+                {filteredProblems.slice(0, visibleCount).map((problem) => (
+                  <ProblemCard
+                    key={problem._id}
+                    problem={problem}
+                    progress={progress[problem._id] || { done: false, revised: false }}
+                    onProgressChange={(type) => handleProgressChange(problem._id, type)}
+                  />
                 ))}
+                {visibleCount < filteredProblems.length && (
+                  <div className="col-span-full text-center py-6 text-slate-400 animate-pulse">Loading more...</div>
+                )}
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
-                {filteredProblems.map((problem) => (
-              <div key={problem._id} className="group flex bg-gradient-to-br from-slate-900/80 to-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-xl p-3 hover:from-slate-800/80 hover:to-slate-700/80 transition-all duration-500 hover:scale-[1.01] hover:shadow-xl hover:shadow-cyan-500/10 hover:border-cyan-500/30">
-                <div className="flex-shrink-0 w-24 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg mr-4">
-                  {problem.serial}
-                </div>
-                <div className="flex-1 flex flex-col justify-between">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-lg font-bold text-white group-hover:text-cyan-400 transition-colors duration-300 line-clamp-1">{problem.title}</h3>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold border shadow ${getDifficultyColor(problem.difficulty)}`}>{problem.difficulty}</span>
-                    <div className="flex flex-wrap gap-1">
-                      {problem.topic.split(',').map((topic, idx) => (
-                        <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-slate-800/50 rounded border border-slate-600/30">
-                          {getTopicIcon(topic.trim())}
-                          <span className="text-xs text-slate-300 font-medium">{topic.trim()}</span>
+              <div
+                ref={listRef}
+                className="flex flex-col gap-3 overflow-y-auto overflow-x-hidden"
+                style={{ maxHeight: '70vh', minWidth: '0', width: '100%' }}
+              >
+                {filteredProblems.slice(0, visibleCount).map((problem) => (
+                  <div
+                    key={problem._id}
+                    className="group flex flex-col md:flex-row bg-gradient-to-br from-slate-900/80 to-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-xl p-3 md:p-4 hover:from-slate-800/80 hover:to-slate-700/80 transition-all duration-500 hover:scale-[1.01] hover:shadow-xl hover:shadow-cyan-500/10 hover:border-cyan-500/30 min-w-0"
+                  >
+                    {/* Serial number */}
+                    <div className="flex-shrink-0 w-16 h-12 md:w-24 md:h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-base md:text-lg shadow-lg mb-2 md:mb-0 md:mr-4">
+                      {problem.serial}
+                    </div>
+                    {/* Main content */}
+                    <div className="flex-1 flex flex-col justify-between min-w-0">
+                      {/* Title always visible, truncated if needed */}
+                      <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2 mb-1 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h3 className="text-base md:text-lg font-bold text-white group-hover:text-cyan-400 transition-colors duration-300 truncate min-w-0" style={{ maxWidth: '100%' }}>{problem.title}</h3>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold border shadow ${getDifficultyColor(problem.difficulty)}`} style={{ flex: 'none', whiteSpace: 'nowrap' }}>{problem.difficulty}</span>
                         </div>
-                      ))}
+                      </div>
+                      {/* Tags: horizontal scroll on mobile, wrap on desktop */}
+                      <div className="flex gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible pb-1 hide-scrollbar">
+                        {problem.topic.split(',').map((topic, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1 px-2 py-0.5 bg-slate-800/50 rounded border border-slate-600/30 flex-shrink-0 text-xs min-w-max"
+                            style={{ marginLeft: 4, marginRight: 4 }}
+                          >
+                            {getTopicIcon(topic.trim())}
+                            <span className="text-xs text-slate-300 font-medium">{topic.trim()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <a
+                          href={problem.questionLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2 py-0.5 bg-cyan-500/10 border border-cyan-400/30 rounded-full text-cyan-300 text-xs font-bold hover:bg-cyan-500/20 hover:text-white transition-colors duration-200 shadow min-w-max"
+                        >
+                          Problem
+                        </a>
+                        <a
+                          href={problem.solutionLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2 py-0.5 bg-purple-500/10 border border-purple-400/30 rounded-full text-purple-300 text-xs font-bold hover:bg-purple-500/20 hover:text-white transition-colors duration-200 shadow min-w-max"
+                        >
+                          Solution
+                        </a>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <a href={problem.questionLink} target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline text-xs font-semibold">Problem</a>
-                    <a href={problem.solutionLink} target="_blank" rel="noopener noreferrer" className="text-purple-400 underline text-xs font-semibold">Solution</a>
-                  </div>
-                  {/* Progress checkboxes for list view below buttons */}
-                  <div className="flex flex-row gap-6 justify-center mt-2">
-                    <label className="flex items-center gap-2 cursor-pointer select-none group">
-                      <input
-                        type="checkbox"
-                        checked={progress[problem._id]?.done || false}
-                        onChange={() => handleProgressChange(problem._id, "done")}
-                        className="custom-checkbox"
-                      />
-                      <span className="text-xs font-bold text-green-400 group-hover:text-white transition-colors duration-200">Done</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer select-none group">
-                      <input
-                        type="checkbox"
-                        checked={progress[problem._id]?.revised || false}
-                        onChange={() => handleProgressChange(problem._id, "revised")}
-                        className="custom-checkbox"
-                      />
-                      <span className="text-xs font-bold text-cyan-400 group-hover:text-white transition-colors duration-200">Revised</span>
-                    </label>
-                  </div>
-                </div>
-                <div className="hidden md:block ml-4 w-40 h-20 rounded-lg overflow-hidden border border-slate-700/50 bg-black/40">
-                  <iframe
-                    src={`https://www.youtube.com/embed/${getYouTubeVideoId(problem.solutionLink)}`}
-                    title={`Solution for ${problem.title}`}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    className="w-full h-full"
-                  />
-                </div>
-              </div>
                 ))}
+                {visibleCount < filteredProblems.length && (
+                  <div className="text-center py-6 text-slate-400 animate-pulse">Loading more...</div>
+                )}
               </div>
             )}
           </>
+        )}
+        {/* Buy Me a Coffee / Support Link */}
+        {!loading && (
+          <div className="w-full flex justify-center mt-8 mb-6">
+            <a
+              href="https://rzp.io/rzp/gRJbYcX6"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 text-lg"
+            >
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-white">
+                <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
+                <g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g>
+                <g id="SVGRepo_iconCarrier">
+                  <g id="Environment / Coffee">
+                    <path id="Vector" d="M4 20H10.9433M10.9433 20H11.0567M10.9433 20C10.9622 20.0002 10.9811 20.0002 11 20.0002C11.0189 20.0002 11.0378 20.0002 11.0567 20M10.9433 20C7.1034 19.9695 4 16.8468 4 12.9998V8.92285C4 8.41305 4.41305 8 4.92285 8H17.0767C17.5865 8 18 8.41305 18 8.92285V9M11.0567 20H18M11.0567 20C14.8966 19.9695 18 16.8468 18 12.9998M18 9H19.5C20.8807 9 22 10.1193 22 11.5C22 12.8807 20.8807 14 19.5 14H18V12.9998M18 9V12.9998M15 3L14 5M12 3L11 5M9 3L8 5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+                  </g>
+                </g>
+              </svg>
+              Buy me a coffee
+            </a>
+          </div>
         )}
       </main>
     </div>
