@@ -10,7 +10,7 @@ async function connectToDatabase() {
       useUnifiedTopology: true,
     });
     await client.connect();
-    db = client.db('test'); // Your database name
+    db = client.db('test');
   }
   return db;
 }
@@ -18,12 +18,10 @@ async function connectToDatabase() {
 export async function GET(request) {
   try {
     const database = await connectToDatabase();
-    const collection = database.collection('leetcodelinks'); // Your collection name
+    const collection = database.collection('leetcodelinks');
 
-    // Fetch all problems from MongoDB
     const problems = await collection.find({}).toArray();
 
-    // Transform the data to match your frontend structure
     const transformedProblems = problems.map(problem => ({
       _id: problem._id.toString(),
       serial: problem.serial,
@@ -56,10 +54,8 @@ export async function POST(request) {
     const database = await connectToDatabase();
     const collection = database.collection('leetcodelinks');
 
-
-    // Check if serial already exists (as number or string)
     let serialToCheck = body.serial;
-    // Try to parse as number if possible
+
     if (!isNaN(Number(serialToCheck))) {
       serialToCheck = Number(serialToCheck);
     }
@@ -75,7 +71,6 @@ export async function POST(request) {
       }, { status: 409 });
     }
 
-    // Insert new problem
     const result = await collection.insertOne(body);
 
     return Response.json({
@@ -102,7 +97,6 @@ export async function PUT(request) {
     const database = await connectToDatabase();
     const collection = database.collection('leetcodelinks');
 
-    // Update problem
     const result = await collection.updateOne(
       { _id: new ObjectId(_id) },
       { $set: updateData }
@@ -145,7 +139,6 @@ export async function DELETE(request) {
     const database = await connectToDatabase();
     const collection = database.collection('leetcodelinks');
 
-    // Delete problem
     const result = await collection.deleteOne({ _id: new ObjectId(id) });
 
     if (result.deletedCount === 0) {
