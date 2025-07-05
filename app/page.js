@@ -28,7 +28,37 @@ const LeetCodeShowcase = () => {
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({ total: 0, easy: 0, medium: 0, hard: 0 });
   const [topics, setTopics] = useState([]);
+  // Progress state: { [problemId]: { done: boolean, revised: boolean } }
+  const [progress, setProgress] = useState({});
 
+  // Load progress from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("leetcode-progress");
+      if (stored) {
+        setProgress(JSON.parse(stored));
+      }
+    }
+  }, []);
+
+  // Save progress to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("leetcode-progress", JSON.stringify(progress));
+    }
+  }, [progress]);
+
+  // Handler for checkbox changes
+  const handleProgressChange = (problemId, type) => {
+    setProgress((prev) => {
+      const prevState = prev[problemId] || { done: false, revised: false };
+      const newState = {
+        ...prevState,
+        [type]: !prevState[type],
+      };
+      return { ...prev, [problemId]: newState };
+    });
+  };
   // Fetch problems from MongoDB via API
   const fetchProblemsFromMongo = async () => {
     try {
@@ -187,7 +217,7 @@ const LeetCodeShowcase = () => {
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 mb-3">
           <a
             href={problem.questionLink}
             target="_blank"
@@ -212,6 +242,27 @@ const LeetCodeShowcase = () => {
             />
             Solution
           </a>
+        </div>
+        {/* Progress checkboxes below buttons */}
+        <div className="flex flex-row gap-6 justify-center mb-4">
+          <label className="flex items-center gap-2 cursor-pointer select-none group">
+            <input
+              type="checkbox"
+              checked={progress[problem._id]?.done || false}
+              onChange={() => handleProgressChange(problem._id, "done")}
+              className="custom-checkbox"
+            />
+            <span className="text-xs font-bold text-green-400 group-hover:text-white transition-colors duration-200">Done</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer select-none group">
+            <input
+              type="checkbox"
+              checked={progress[problem._id]?.revised || false}
+              onChange={() => handleProgressChange(problem._id, "revised")}
+              className="custom-checkbox"
+            />
+            <span className="text-xs font-bold text-cyan-400 group-hover:text-white transition-colors duration-200">Revised</span>
+          </label>
         </div>
       </div>
     </div>
@@ -440,38 +491,59 @@ const LeetCodeShowcase = () => {
             ) : (
               <div className="flex flex-col gap-3">
                 {filteredProblems.map((problem) => (
-                  <div key={problem._id} className="group flex bg-gradient-to-br from-slate-900/80 to-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-xl p-3 hover:from-slate-800/80 hover:to-slate-700/80 transition-all duration-500 hover:scale-[1.01] hover:shadow-xl hover:shadow-cyan-500/10 hover:border-cyan-500/30">
-                    <div className="flex-shrink-0 w-24 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg mr-4">
-                      {problem.serial}
-                    </div>
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-lg font-bold text-white group-hover:text-cyan-400 transition-colors duration-300 line-clamp-1">{problem.title}</h3>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold border shadow ${getDifficultyColor(problem.difficulty)}`}>{problem.difficulty}</span>
-                        <div className="flex flex-wrap gap-1">
-                          {problem.topic.split(',').map((topic, idx) => (
-                            <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-slate-800/50 rounded border border-slate-600/30">
-                              {getTopicIcon(topic.trim())}
-                              <span className="text-xs text-slate-300 font-medium">{topic.trim()}</span>
-                            </div>
-                          ))}
+              <div key={problem._id} className="group flex bg-gradient-to-br from-slate-900/80 to-slate-800/80 backdrop-blur-xl border border-slate-700/50 rounded-xl p-3 hover:from-slate-800/80 hover:to-slate-700/80 transition-all duration-500 hover:scale-[1.01] hover:shadow-xl hover:shadow-cyan-500/10 hover:border-cyan-500/30">
+                <div className="flex-shrink-0 w-24 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg mr-4">
+                  {problem.serial}
+                </div>
+                <div className="flex-1 flex flex-col justify-between">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-lg font-bold text-white group-hover:text-cyan-400 transition-colors duration-300 line-clamp-1">{problem.title}</h3>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold border shadow ${getDifficultyColor(problem.difficulty)}`}>{problem.difficulty}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {problem.topic.split(',').map((topic, idx) => (
+                        <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-slate-800/50 rounded border border-slate-600/30">
+                          {getTopicIcon(topic.trim())}
+                          <span className="text-xs text-slate-300 font-medium">{topic.trim()}</span>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <a href={problem.questionLink} target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline text-xs font-semibold">Problem</a>
-                        <a href={problem.solutionLink} target="_blank" rel="noopener noreferrer" className="text-purple-400 underline text-xs font-semibold">Solution</a>
-                      </div>
-                    </div>
-                    <div className="hidden md:block ml-4 w-40 h-20 rounded-lg overflow-hidden border border-slate-700/50 bg-black/40">
-                      <iframe
-                        src={`https://www.youtube.com/embed/${getYouTubeVideoId(problem.solutionLink)}`}
-                        title={`Solution for ${problem.title}`}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="w-full h-full"
-                      />
+                      ))}
                     </div>
                   </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <a href={problem.questionLink} target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline text-xs font-semibold">Problem</a>
+                    <a href={problem.solutionLink} target="_blank" rel="noopener noreferrer" className="text-purple-400 underline text-xs font-semibold">Solution</a>
+                  </div>
+                  {/* Progress checkboxes for list view below buttons */}
+                  <div className="flex flex-row gap-6 justify-center mt-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none group">
+                      <input
+                        type="checkbox"
+                        checked={progress[problem._id]?.done || false}
+                        onChange={() => handleProgressChange(problem._id, "done")}
+                        className="custom-checkbox"
+                      />
+                      <span className="text-xs font-bold text-green-400 group-hover:text-white transition-colors duration-200">Done</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none group">
+                      <input
+                        type="checkbox"
+                        checked={progress[problem._id]?.revised || false}
+                        onChange={() => handleProgressChange(problem._id, "revised")}
+                        className="custom-checkbox"
+                      />
+                      <span className="text-xs font-bold text-cyan-400 group-hover:text-white transition-colors duration-200">Revised</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="hidden md:block ml-4 w-40 h-20 rounded-lg overflow-hidden border border-slate-700/50 bg-black/40">
+                  <iframe
+                    src={`https://www.youtube.com/embed/${getYouTubeVideoId(problem.solutionLink)}`}
+                    title={`Solution for ${problem.title}`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="w-full h-full"
+                  />
+                </div>
+              </div>
                 ))}
               </div>
             )}
