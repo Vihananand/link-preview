@@ -287,7 +287,7 @@ const LeetCodeShowcase = () => {
               Connecting to Server...
             </p>
             <p className="text-slate-400">
-              Fetching problems from LeetcodeLinks cluster
+              Fetching important problems from Leetcode
             </p>
           </div>
         ) : error ? (
@@ -295,7 +295,7 @@ const LeetCodeShowcase = () => {
             <Database className="mx-auto mb-4 text-red-400" size={64} />
             <p className="text-xl font-bold text-red-300 mb-2">{error}</p>
             <p className="text-slate-400 mb-6">
-              Please check your MongoDB connection and try again
+              Please check your internet connection and try again or contact admin!!
             </p>
             <button
               onClick={fetchProblemsFromMongo}
@@ -467,7 +467,6 @@ const LeetCodeShowcase = () => {
                       <iframe
                         src={`https://www.youtube.com/embed/${getYouTubeVideoId(problem.solutionLink)}`}
                         title={`Solution for ${problem.title}`}
-                        frameBorder="0"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
                         className="w-full h-full"
