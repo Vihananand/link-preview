@@ -178,7 +178,6 @@ const LeetCodeShowcase = () => {
                 problem.solutionLink
               )}`}
               title={`Solution for ${problem.title}`}
-              frameBorder="0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
               className="w-full h-full"
