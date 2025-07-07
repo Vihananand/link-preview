@@ -660,7 +660,7 @@ const LeetCodeShowcase = () => {
         {!loading && (
           <div className="w-full flex justify-center mt-8 mb-6">
             <a
-              href="https://rzp.io/rzp/gRJbYcX6"
+              href="/upi.png"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 text-lg"
