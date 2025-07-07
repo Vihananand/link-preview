@@ -50,7 +50,14 @@ const ProgressPage = () => {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         if (!data.success) throw new Error(data.message || "Failed to fetch problems");
-        setProblems(data.problems);
+        // Sort problems by serial number (numeric ascending)
+        const sortedProblems = [...data.problems].sort((a, b) => {
+          const aNum = Number(a.serial);
+          const bNum = Number(b.serial);
+          if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+          return String(a.serial).localeCompare(String(b.serial));
+        });
+        setProblems(sortedProblems);
         setLoading(false);
       } catch (error) {
         setError("Failed to fetch problems from database");
@@ -70,42 +77,16 @@ const ProgressPage = () => {
   const donePercent = totalProblems ? Math.round((doneCount / totalProblems) * 100) : 0;
   const revisedPercent = totalProblems ? Math.round((revisedCount / totalProblems) * 100) : 0;
 
-  // Infinite scroll logic (container-based, trackpad/mouse compatible)
-  const CHUNK_SIZE = 20;
-  const [visibleCount, setVisibleCount] = useState(CHUNK_SIZE);
-  const listRef = useRef(null);
-
-  useEffect(() => {
-    setVisibleCount(CHUNK_SIZE); // Reset on problems change
-  }, [problems]);
-
-  // Debounce utility
-  function debounce(fn, ms) {
-    let timer;
-    return (...args) => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => fn(...args), ms);
-    };
-  }
-
-  useEffect(() => {
-    if (loading || error) return;
-    const container = listRef.current;
-    if (!container) return;
-    const handleScroll = debounce(() => {
-      if (
-        container.scrollTop + container.clientHeight >= container.scrollHeight - 600 &&
-        visibleCount < problems.length
-      ) {
-        setVisibleCount((prev) => Math.min(prev + CHUNK_SIZE, problems.length));
-      }
-    }, 100);
-    container.addEventListener("scroll", handleScroll);
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [loading, error, visibleCount, problems.length]);
+  // Always sort problems before rendering, in case API or state changes
+  const sortedProblems = [...problems].sort((a, b) => {
+    const aNum = Number(a.serial);
+    const bNum = Number(b.serial);
+    if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+    return String(a.serial).localeCompare(String(b.serial));
+  });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center px-4 py-10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center px-4">
       <div className="max-w-xl w-full">
         <div className="flex items-center gap-4 mb-8">
           <div className="p-3 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl shadow-lg">
@@ -176,13 +157,11 @@ const ProgressPage = () => {
                 </div>
               </div>
             )}
-            {/* Problem List with checkboxes, no YT preview, infinite scroll (container-based) */}
             <div
-              ref={listRef}
               className="flex flex-col gap-3 mt-8 overflow-y-auto"
               style={{ maxHeight: '70vh' }}
             >
-              {problems.slice(0, visibleCount).map((problem) => {
+              {sortedProblems.map((problem) => {
                 const isDone = progress[problem._id]?.done || false;
                 const isRevised = progress[problem._id]?.revised || false;
                 return (
@@ -249,9 +228,6 @@ const ProgressPage = () => {
                   </div>
                 );
               })}
-              {visibleCount < problems.length && (
-                <div className="text-center py-6 text-slate-400 animate-pulse">Loading more...</div>
-              )}
             </div>
           </>
         )}

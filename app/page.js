@@ -188,7 +188,14 @@ const LeetCodeShowcase = () => {
         problem.topic.split(',').map(t => t.trim()).includes(filterTopic);
       return matchesSearch && matchesDifficulty && matchesTopic;
     });
-    setFilteredProblems(filtered);
+    // Sort filtered problems by serial number (numeric ascending)
+    const sorted = [...filtered].sort((a, b) => {
+      const aNum = Number(a.serial);
+      const bNum = Number(b.serial);
+      if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+      return String(a.serial).localeCompare(String(b.serial));
+    });
+    setFilteredProblems(sorted);
   }, [searchTerm, filterDifficulty, filterTopic, problems]);
 
   const getYouTubeVideoId = (url) => {
