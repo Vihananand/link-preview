@@ -11,16 +11,23 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+
 export const metadata = {
   title: "Leetcode Hub",
   description:
     "Your all-in-one platform to explore Leetcode problems with handpicked YouTube video solutions. Practice smarter, not harder.",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" type="image/png" href="/favicon.png" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
