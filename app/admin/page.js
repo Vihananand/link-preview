@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
 const AdminPage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -13,6 +13,7 @@ const AdminPage = () => {
   const [editData, setEditData] = useState({ serial: '', title: '', difficulty: '', topic: '', questionLink: '', solutionLink: '' });
   const [showCreate, setShowCreate] = useState(false);
   const [createData, setCreateData] = useState({ serial: '', title: '', difficulty: '', topic: '', questionLink: '', solutionLink: '' });
+
   // Create handlers
   const handleCreateChange = (e) => {
     setCreateData({ ...createData, [e.target.name]: e.target.value });
@@ -135,8 +136,17 @@ const AdminPage = () => {
   }
 
   return (
+
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-8">
-      <h1 className="text-3xl font-black bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-8">Admin Panel</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
+        <h1 className="text-3xl font-black bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">Admin Panel</h1>
+        <a
+          href="/admin/change-password"
+          className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 text-lg"
+        >
+          Change Password
+        </a>
+      </div>
       {error && <div className="mb-4 text-red-400">{error}</div>}
       {loading && <div className="mb-4 text-cyan-400">Loading...</div>}
 

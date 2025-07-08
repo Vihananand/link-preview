@@ -1,4 +1,6 @@
+
 import { MongoClient } from 'mongodb';
+import bcrypt from 'bcryptjs';
 
 let client;
 let db;
@@ -27,13 +29,32 @@ export async function POST(request) {
       console.error('MongoDB findOne error:', err);
       return Response.json({ success: false, message: 'Database error', error: err.message }, { status: 500 });
     }
-    console.log('Auth Debug:', { username, password, user });
-    if (!user || user.password !== password) {
-      console.log('Auth Failed: user or password mismatch', { inputPassword: password, dbPassword: user ? user.password : null });
+    // Removed debug log for production
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return Response.json({ success: false, message: 'Invalid credentials' }, { status: 401 });
     }
     return Response.json({ success: true });
   } catch (error) {
     return Response.json({ success: false, message: 'Auth error', error: error.message }, { status: 500 });
+  }
+}
+
+// Change password endpoint (PUT)
+export async function PUT(request) {
+  try {
+    const { username, newPassword } = await request.json();
+    const database = await connectToAuthDb();
+    const collection = database.collection('authenticateuser');
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const result = await collection.updateOne(
+      { username },
+      { $set: { password: hashedPassword } }
+    );
+    if (result.matchedCount === 0) {
+      return Response.json({ success: false, message: 'User not found' }, { status: 404 });
+    }
+    return Response.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    return Response.json({ success: false, message: 'Password update error', error: error.message }, { status: 500 });
   }
 }

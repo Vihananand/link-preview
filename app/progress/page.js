@@ -107,6 +107,12 @@ const ProgressPage = () => {
             </svg>
             Buy me a coffee
           </a>
+          <a
+            href="/admin987/change-password"
+            className="ml-4 inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all duration-300 text-lg"
+          >
+            Change Password
+          </a>
         </div>
         <div className="flex items-center gap-4 mb-8">
           <div className="p-3 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl shadow-lg">
