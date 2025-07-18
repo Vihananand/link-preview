@@ -1,4 +1,5 @@
 import { MongoClient, ObjectId } from 'mongodb';
+import validator from 'validator';
 
 let client;
 let db;
@@ -13,6 +14,34 @@ async function connectToDatabase() {
     db = client.db('test');
   }
   return db;
+}
+
+function sanitizeProblemInput(input) {
+  return {
+    serial: validator.escape(String(input.serial)),
+    title: validator.escape(String(input.title)),
+    difficulty: validator.escape(String(input.difficulty)),
+    topic: validator.escape(String(input.topic)),
+    questionLink: validator.isURL(input.questionLink) ? validator.trim(input.questionLink) : '',
+    solutionLink: validator.isURL(input.solutionLink) ? validator.trim(input.solutionLink) : ''
+  };
+}
+
+function isValidProblemInput(input) {
+  return (
+    input.serial &&
+    input.title &&
+    input.difficulty &&
+    input.topic &&
+    input.questionLink &&
+    input.solutionLink &&
+    validator.isInt(String(input.serial)) &&
+    validator.isLength(input.title, { min: 1, max: 200 }) &&
+    validator.isLength(input.difficulty, { min: 1, max: 50 }) &&
+    validator.isLength(input.topic, { min: 1, max: 100 }) &&
+    validator.isURL(input.questionLink) &&
+    validator.isURL(input.solutionLink)
+  );
 }
 
 export async function GET(request) {
@@ -39,11 +68,12 @@ export async function GET(request) {
     });
 
   } catch (error) {
+    // Log error internally but do not expose details to client
     console.error('Database error:', error);
     return Response.json({
       success: false,
       message: 'Failed to fetch problems from database',
-      error: error.message
+      error: 'Internal server error'
     }, { status: 500 });
   }
 }
@@ -51,11 +81,17 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
+    if (!isValidProblemInput(body)) {
+      return Response.json({
+        success: false,
+        message: 'Invalid input data.'
+      }, { status: 400 });
+    }
+    const sanitizedBody = sanitizeProblemInput(body);
     const database = await connectToDatabase();
     const collection = database.collection('leetcodelinks');
 
-    let serialToCheck = body.serial;
-
+    let serialToCheck = sanitizedBody.serial;
     if (!isNaN(Number(serialToCheck))) {
       serialToCheck = Number(serialToCheck);
     }
@@ -71,7 +107,7 @@ export async function POST(request) {
       }, { status: 409 });
     }
 
-    const result = await collection.insertOne(body);
+    const result = await collection.insertOne(sanitizedBody);
 
     return Response.json({
       success: true,
@@ -84,7 +120,7 @@ export async function POST(request) {
     return Response.json({
       success: false,
       message: 'Failed to add problem to database',
-      error: error.message
+      error: 'Internal server error'
     }, { status: 500 });
   }
 }
@@ -92,14 +128,20 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
+    if (!body._id || !isValidProblemInput(body)) {
+      return Response.json({
+        success: false,
+        message: 'Invalid input data.'
+      }, { status: 400 });
+    }
     const { _id, ...updateData } = body;
-    
+    const sanitizedUpdate = sanitizeProblemInput(updateData);
     const database = await connectToDatabase();
     const collection = database.collection('leetcodelinks');
 
     const result = await collection.updateOne(
       { _id: new ObjectId(_id) },
-      { $set: updateData }
+      { $set: sanitizedUpdate }
     );
 
     if (result.matchedCount === 0) {
@@ -119,7 +161,7 @@ export async function PUT(request) {
     return Response.json({
       success: false,
       message: 'Failed to update problem',
-      error: error.message
+      error: 'Internal server error'
     }, { status: 500 });
   }
 }
@@ -154,11 +196,12 @@ export async function DELETE(request) {
     });
 
   } catch (error) {
+    // Log error internally but do not expose details to client
     console.error('Database error:', error);
     return Response.json({
       success: false,
       message: 'Failed to delete problem',
-      error: error.message
+      error: 'Internal server error'
     }, { status: 500 });
   }
 }

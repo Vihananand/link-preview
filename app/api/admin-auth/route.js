@@ -33,9 +33,16 @@ export async function POST(request) {
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return Response.json({ success: false, message: 'Invalid credentials' }, { status: 401 });
     }
-    return Response.json({ success: true });
+    // Set a simple admin token cookie (for demo; use JWT for production)
+    const token = process.env.ADMIN_TOKEN || 'admin-secret-token';
+    const response = Response.json({ success: true });
+    // Always set cookie with HttpOnly, Secure, SameSite=Strict
+    response.headers.set('Set-Cookie', `admin_token=${token}; Path=/; HttpOnly; SameSite=Strict; Secure`);
+    return response;
   } catch (error) {
-    return Response.json({ success: false, message: 'Auth error', error: error.message }, { status: 500 });
+    // Log error internally but do not expose details to client
+    console.error('Auth error:', error);
+    return Response.json({ success: false, message: 'Auth error', error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -55,6 +62,8 @@ export async function PUT(request) {
     }
     return Response.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
-    return Response.json({ success: false, message: 'Password update error', error: error.message }, { status: 500 });
+    // Log error internally but do not expose details to client
+    console.error('Password update error:', error);
+    return Response.json({ success: false, message: 'Password update error', error: 'Internal server error' }, { status: 500 });
   }
 }
