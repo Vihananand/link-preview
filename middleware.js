@@ -7,8 +7,10 @@ const limiter = rateLimit({
 });
 
 const TRUSTED_ORIGINS = [
-  'http://localhost:3000', // local dev
-  'https://link-preview-gules.vercel.app/' // production
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://link-preview-gules.vercel.app', // Vercel preview
+  'https://your-frontend-domain.com' // production
 ];
 
 const CSRF_TOKEN = process.env.CSRF_TOKEN || 'demo-csrf-token';
